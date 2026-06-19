@@ -1,0 +1,33 @@
+name: pedestrian_safety
+description: Real-time pedestrian crossing safety assistant for visually impaired users.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  camera: ^0.11.0+2
+  flutter_tts: ^4.2.0
+  google_fonts: ^6.2.1
+  percent_indicator: ^4.2.3
+  shared_preferences: ^2.3.4
+  flutter_animate: ^4.5.2
+  permission_handler: ^11.3.1
+  tflite_flutter: ^0.11.0
+  image: ^4.3.0
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/
+    - assets/sounds/
