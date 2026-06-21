@@ -1,4 +1,4 @@
-import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
@@ -28,7 +28,7 @@ class ReportScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: AppColors.textPrimary,
-                      fontWeight: FontWeight.black,
+                      fontWeight: FontWeight.w900,
                       letterSpacing: 1.0,
                     ),
               ),
@@ -36,7 +36,8 @@ class ReportScreen extends StatelessWidget {
               const Text(
                 'Safety metrics and threat progression logs',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12.0),
+                style:
+                    TextStyle(color: AppColors.textSecondary, fontSize: 12.0),
               ),
               const SizedBox(height: 24.0),
 
@@ -57,7 +58,8 @@ class ReportScreen extends StatelessWidget {
                     child: _buildKpiCard(
                       context,
                       title: AppStrings.falseSafeRate,
-                      value: '${(report.falseSafeRate * 100).toStringAsFixed(1)}%',
+                      value:
+                          '${(report.falseSafeRate * 100).toStringAsFixed(1)}%',
                       icon: Icons.percent,
                       color: hasNoFalseSafe ? AppColors.safe : AppColors.wait,
                     ),
@@ -94,7 +96,8 @@ class ReportScreen extends StatelessWidget {
                       const SizedBox(height: 4.0),
                       const Text(
                         'Tracks the threat levels during the crossing duration.',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 10.0),
+                        style: TextStyle(
+                            color: AppColors.textMuted, fontSize: 10.0),
                       ),
                       const SizedBox(height: 20.0),
                       Expanded(
@@ -133,7 +136,8 @@ class ReportScreen extends StatelessWidget {
                 ),
                 child: const Text(
                   'RETURN TO MAIN MENU',
-                  style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, letterSpacing: 1.0),
                 ),
               ),
             ],
@@ -155,22 +159,27 @@ class ReportScreen extends StatelessWidget {
       Container(
         padding: const EdgeInsets.all(12.0),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: color, size: 24.0),
       ),
-      if (!isHorizontal) const SizedBox(height: 16.0) else const SizedBox(width: 20.0),
+      if (!isHorizontal)
+        const SizedBox(height: 16.0)
+      else
+        const SizedBox(width: 20.0),
       Expanded(
         child: Column(
-          crossAxisAlignment: isHorizontal ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+          crossAxisAlignment: isHorizontal
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               value,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: AppColors.textPrimary,
-                    fontWeight: FontWeight.black,
+                    fontWeight: FontWeight.w900,
                   ),
             ),
             Text(
@@ -188,7 +197,7 @@ class ReportScreen extends StatelessWidget {
 
     return GlassCard(
       padding: const EdgeInsets.all(16.0),
-      borderColor: color.withOpacity(0.2),
+      borderColor: color.withValues(alpha: 0.2),
       child: isHorizontal
           ? Row(
               children: content,
@@ -212,7 +221,7 @@ class RiskTimelinePainter extends CustomPainter {
 
     // Draw baseline grid
     final gridPaint = Paint()
-      ..color = AppColors.glassBorder.withOpacity(0.1)
+      ..color = AppColors.glassBorder.withValues(alpha: 0.1)
       ..strokeWidth = 1.0;
 
     for (int i = 1; i < 4; i++) {
@@ -220,8 +229,9 @@ class RiskTimelinePainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    final double stepX = size.width / (points.length > 1 ? points.length - 1 : 1);
-    
+    final double stepX =
+        size.width / (points.length > 1 ? points.length - 1 : 1);
+
     final path = Path();
     path.moveTo(0, size.height * (1.0 - points.first));
 
@@ -253,8 +263,8 @@ class RiskTimelinePainter extends CustomPainter {
     final fillPaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          AppColors.safe.withOpacity(0.1),
-          AppColors.stop.withOpacity(0.1),
+          AppColors.safe.withValues(alpha: 0.1),
+          AppColors.stop.withValues(alpha: 0.1),
         ],
         begin: Alignment.bottomCenter,
         end: Alignment.topCenter,

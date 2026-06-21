@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animated_state_indicator.dart';
-import '../providers/settings_provider.dart';
-import '../providers/audio_provider.dart';
-import '../providers/safety_provider.dart';
 import '../../domain/entities/safety_state.dart';
 import 'camera_screen.dart';
 import 'settings_screen.dart';
@@ -16,21 +12,21 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settingsProvider = Provider.of<SettingsProvider>(context);
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
           color: AppColors.background,
           image: DecorationImage(
-            image: AssetImage('assets/images/bg_grid.png'), // Fallback background pattern
+            image: AssetImage(
+                'assets/images/bg_grid.png'), // Fallback background pattern
             fit: BoxFit.cover,
             opacity: 0.05,
           ),
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -43,11 +39,12 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(width: 12.0),
                     Text(
                       '🚦 CROSSING ASSIST',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2.0,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.0,
+                              ),
                     ),
                   ],
                 ),
@@ -76,13 +73,13 @@ class HomeScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20.0),
                     child: GlassCard(
                       padding: const EdgeInsets.all(24.0),
-                      borderColor: AppColors.safe.withOpacity(0.3),
+                      borderColor: AppColors.safe.withValues(alpha: 0.3),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(16.0),
                             decoration: BoxDecoration(
-                              color: AppColors.safe.withOpacity(0.1),
+                              color: AppColors.safe.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -98,7 +95,10 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 Text(
                                   AppStrings.liveCamera,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
                                         color: AppColors.textPrimary,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -106,7 +106,10 @@ class HomeScreen extends StatelessWidget {
                                 const SizedBox(height: 4.0),
                                 Text(
                                   AppStrings.liveCameraDesc,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
                                         color: AppColors.textSecondary,
                                       ),
                                 ),
@@ -133,19 +136,20 @@ class HomeScreen extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const SettingsScreen()),
                       );
                     },
                     borderRadius: BorderRadius.circular(20.0),
                     child: GlassCard(
                       padding: const EdgeInsets.all(24.0),
-                      borderColor: AppColors.accent.withOpacity(0.3),
+                      borderColor: AppColors.accent.withValues(alpha: 0.3),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(16.0),
                             decoration: BoxDecoration(
-                              color: AppColors.accent.withOpacity(0.1),
+                              color: AppColors.accent.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -161,7 +165,10 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 Text(
                                   AppStrings.settings,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
                                         color: AppColors.textPrimary,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -169,7 +176,10 @@ class HomeScreen extends StatelessWidget {
                                 const SizedBox(height: 4.0),
                                 Text(
                                   AppStrings.settingsDesc,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
                                         color: AppColors.textSecondary,
                                       ),
                                 ),
@@ -194,7 +204,8 @@ class HomeScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12.0, vertical: 6.0),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceLight,
                         borderRadius: BorderRadius.circular(12.0),

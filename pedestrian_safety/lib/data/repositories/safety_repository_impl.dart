@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
+import 'package:camera/camera.dart';
 import '../../core/constants/safety_constants.dart';
 import '../../domain/entities/safety_state.dart';
 import '../../domain/entities/vehicle.dart';
@@ -8,6 +8,7 @@ import '../../domain/repositories/safety_repository.dart';
 import '../../domain/usecases/state_machine.dart';
 import '../../domain/usecases/risk_scorer.dart';
 import '../datasources/mock_datasource.dart';
+import '../datasources/tflite_model_service.dart';
 import '../models/crossing_config.dart';
 import '../models/safety_report.dart';
 import '../models/state_output.dart';
@@ -15,17 +16,17 @@ import '../models/vehicle_info.dart';
 
 class SafetyRepositoryImpl implements SafetyRepository {
   final MockDatasource _mockDatasource = MockDatasource();
+  final TfliteModelService _tfliteModelService = TfliteModelService();
   final SafetyStateMachine _stateMachine = SafetyStateMachine();
 
   // State caches
   List<Vehicle> _activeVehicles = [];
   List<Vehicle> _topKThreats = [];
   StateOutput? _latestState;
-  
+
   // Metrics
   double _fps = 30.0;
   int _tier = 1;
-  int _frameCount = 0;
   DateTime? _lastFrameTime;
   final List<double> _fpsHistory = [];
 
@@ -47,12 +48,11 @@ class SafetyRepositoryImpl implements SafetyRepository {
 
   @override
   Future<void> processFrame(dynamic frame, CrossingConfig config) async {
-    _frameCount++;
-
     // Calculate FPS and performance tier
     final now = DateTime.now();
     if (_lastFrameTime != null) {
-      final double instFps = 1000.0 / now.difference(_lastFrameTime!).inMilliseconds.clamp(1, 100000);
+      final double instFps = 1000.0 /
+          now.difference(_lastFrameTime!).inMilliseconds.clamp(1, 100000);
       _fpsHistory.add(instFps);
       if (_fpsHistory.length > 30) {
         _fpsHistory.removeAt(0);
@@ -69,30 +69,45 @@ class SafetyRepositoryImpl implements SafetyRepository {
       _tier = 3;
     }
 
-    // Get frame dimensions (mock default: 640x480)
-    final double width = 640.0;
-    final double height = 480.0;
+    // Get frame dimensions
+    double width = 640.0;
+    double height = 480.0;
+    if (frame is CameraImage) {
+      width = frame.width.toDouble();
+      height = frame.height.toDouble();
+    }
 
     // Define zones
     final Map<String, Zone> zones = Zone.defineZones(width, height);
     final Zone? crossingZone = zones['CROSSING'];
 
     // 1. Get raw/mock detections
-    final List<VehicleInfo> vehicleInfos = _mockDatasource.getNextFrameDetections(width, height, fps: _fps);
+    List<VehicleInfo> vehicleInfos;
+    if (frame is CameraImage) {
+      vehicleInfos = await _tfliteModelService.detect(frame, width, height);
+    } else {
+      vehicleInfos = _mockDatasource.getNextFrameDetections(width, height, fps: _fps);
+    }
 
     // 2. Rank threats
-    final List<VehicleInfo> topKInfos = RiskScorer.rankThreats(vehicleInfos, crossingZone, k: config.threatRankK);
+    final List<VehicleInfo> topKInfos = RiskScorer.rankThreats(
+        vehicleInfos, crossingZone,
+        k: config.threatRankK);
 
     // 3. Compute risk and propose state
-    final (double riskScore, double confidence, String secondaryCue, SafetyState proposedState) = 
-      RiskScorer.computeRisk(
-        topKInfos,
-        crossingZone,
-        zones,
-        width,
-        config,
-        crossingProgress: 0.0, // Simplification or ego displacement integrated
-      );
+    final (
+      double riskScore,
+      double confidence,
+      String secondaryCue,
+      SafetyState proposedState
+    ) = RiskScorer.computeRisk(
+      topKInfos,
+      crossingZone,
+      zones,
+      width,
+      config,
+      crossingProgress: 0.0, // Simplification or ego displacement integrated
+    );
 
     _riskHistory.add(riskScore);
     if (_riskHistory.length > 500) {
@@ -122,7 +137,8 @@ class SafetyRepositoryImpl implements SafetyRepository {
     }
 
     // Track state switches
-    if (_lastCommittedState != null && _lastCommittedState != stateOut.internalState) {
+    if (_lastCommittedState != null &&
+        _lastCommittedState != stateOut.internalState) {
       _stateSwitches++;
     }
     _lastCommittedState = stateOut.internalState;
@@ -130,8 +146,11 @@ class SafetyRepositoryImpl implements SafetyRepository {
     // Track False-Safe events
     // (Cross now warning emitted, but a vehicle has TTC < safe_ttc)
     if (stateOut.internalState == SafetyState.safe && vehicleInfos.isNotEmpty) {
-      final double safeTtc = (config.roadWidthM / max(0.1, config.walkSpeedMps)) + config.safetyMarginSec;
-      final bool hasThreat = vehicleInfos.any((v) => v.approaching && v.ttcSec < safeTtc);
+      final double safeTtc =
+          (config.roadWidthM / max(0.1, config.walkSpeedMps)) +
+              config.safetyMarginSec;
+      final bool hasThreat =
+          vehicleInfos.any((v) => v.approaching && v.ttcSec < safeTtc);
       if (hasThreat) {
         _falseSafeCount++;
       }
@@ -145,7 +164,6 @@ class SafetyRepositoryImpl implements SafetyRepository {
 
   @override
   Future<void> reset() async {
-    _frameCount = 0;
     _lastFrameTime = null;
     _fpsHistory.clear();
     _fps = 30.0;
@@ -159,6 +177,7 @@ class SafetyRepositoryImpl implements SafetyRepository {
     _latestState = null;
     _stateMachine.reset();
     _mockDatasource.reset();
+    _tfliteModelService.reset();
   }
 
   @override

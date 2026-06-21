@@ -65,7 +65,7 @@ class AppTheme {
         activeTrackColor: AppColors.accent,
         inactiveTrackColor: AppColors.surfaceLight,
         thumbColor: AppColors.accent,
-        overlayColor: AppColors.accent.withOpacity(0.15),
+        overlayColor: AppColors.accent.withValues(alpha: 0.15),
         valueIndicatorColor: AppColors.accent,
         valueIndicatorTextStyle: GoogleFonts.inter(
           color: Colors.white,

@@ -1,0 +1,30 @@
+description: Ultralytics best model trained on Custom Street Object Detection.v6i.yolov8\data.yaml
+author: Ultralytics
+date: '2026-06-21T19:04:21.349038'
+version: 8.4.72
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: bicycle
+  1: bus
+  2: car
+  3: dog
+  4: motorcycle
+  5: person
+  6: scooty
+  7: toto
+args:
+  data: null
+  batch: 1
+  fraction: 1.0
+  half: false
+  int8: false
+  nms: false
+channels: 3
+end2end: false

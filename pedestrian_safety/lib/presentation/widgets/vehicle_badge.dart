@@ -65,7 +65,7 @@ class VehicleOverlayPainter extends CustomPainter {
       // 1. Draw box background tint for persons/dogs (classId 5 and 3)
       if (v.classId == 5 || v.classId == 3) {
         final fillPaint = Paint()
-          ..color = classColor.withOpacity(0.18)
+          ..color = classColor.withValues(alpha: 0.18)
           ..style = PaintingStyle.fill;
         canvas.drawRect(scaledBbox, fillPaint);
       }
@@ -127,7 +127,7 @@ class VehicleOverlayPainter extends CustomPainter {
       );
 
       final bgPaint = Paint()
-        ..color = Colors.black.withOpacity(0.75)
+        ..color = Colors.black.withValues(alpha: 0.75)
         ..style = PaintingStyle.fill;
       
       canvas.drawRRect(

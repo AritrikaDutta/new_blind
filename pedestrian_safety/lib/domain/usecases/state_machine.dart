@@ -5,8 +5,8 @@ class SafetyStateMachine {
   final int smoothingFrames;
   final double minConfidence;
 
-  SafetyState _currentState = SafetyState.safe;
-  SafetyState _pendingState = SafetyState.safe;
+  SafetyState _currentState = SafetyState.uncertain;
+  SafetyState _pendingState = SafetyState.uncertain;
   int _pendingCount = 0;
 
   SafetyStateMachine({
@@ -23,6 +23,21 @@ class SafetyStateMachine {
     SafetyState.safe: ('Cross now', 'walk_normal'),
     SafetyState.walkFast: ('Walk faster', 'walk_fast'),
   };
+
+  int _threatLevel(SafetyState state) {
+    switch (state) {
+      case SafetyState.safe:
+        return 0;
+      case SafetyState.walkFast:
+        return 1;
+      case SafetyState.wait:
+        return 2;
+      case SafetyState.uncertain:
+        return 3;
+      case SafetyState.stop:
+        return 4;
+    }
+  }
 
   StateOutput update({
     required SafetyState proposedState,
@@ -46,12 +61,18 @@ class SafetyStateMachine {
       );
     }
 
-    // Same as current — reset pending accumulator
-    if (proposedState == _currentState) {
+    // Immediate threat escalation (safety-first, bypass smoothing)
+    if (_threatLevel(proposedState) > _threatLevel(_currentState)) {
+      _currentState = proposedState;
       _pendingState = proposedState;
       _pendingCount = 0;
     }
-    // Continuing to accumulate the same pending state
+    // Same as current — reset pending accumulator
+    else if (proposedState == _currentState) {
+      _pendingState = proposedState;
+      _pendingCount = 0;
+    }
+    // Continuing to accumulate the same pending state (de-escalation smoothing)
     else if (proposedState == _pendingState) {
       _pendingCount++;
       if (_pendingCount >= smoothingFrames) {
@@ -79,8 +100,8 @@ class SafetyStateMachine {
   }
 
   void reset() {
-    _currentState = SafetyState.safe;
-    _pendingState = SafetyState.safe;
+    _currentState = SafetyState.uncertain;
+    _pendingState = SafetyState.uncertain;
     _pendingCount = 0;
   }
 }

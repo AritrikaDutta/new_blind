@@ -39,7 +39,7 @@ class RiskGauge extends StatelessWidget {
                 '${(riskScore * 100).toStringAsFixed(0)}%',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: AppColors.textPrimary,
-                      fontWeight: FontWeight.black,
+                      fontWeight: FontWeight.w900,
                     ),
               ),
               Text(

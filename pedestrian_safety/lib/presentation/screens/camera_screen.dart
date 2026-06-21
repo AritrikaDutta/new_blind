@@ -38,7 +38,8 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _initCameraAndPipeline() async {
     final cameraProvider = Provider.of<CameraProvider>(context, listen: false);
     final safetyProvider = Provider.of<SafetyProvider>(context, listen: false);
-    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    final settingsProvider =
+        Provider.of<SettingsProvider>(context, listen: false);
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
 
     await safetyProvider.reset();
@@ -48,7 +49,8 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         _isSimulating = false;
       });
-      cameraProvider.startStreaming(safetyProvider, settingsProvider, audioProvider);
+      cameraProvider.startStreaming(
+          safetyProvider, settingsProvider, audioProvider);
     } else {
       // Start simulation timer if hardware camera is not available (e.g., in emulator)
       _startSimulationLoop();
@@ -58,10 +60,12 @@ class _CameraScreenState extends State<CameraScreen> {
   void _startSimulationLoop() {
     _simulationTimer?.cancel();
     final safetyProvider = Provider.of<SafetyProvider>(context, listen: false);
-    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    final settingsProvider =
+        Provider.of<SettingsProvider>(context, listen: false);
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
 
-    _simulationTimer = Timer.periodic(const Duration(milliseconds: 33), (timer) {
+    _simulationTimer =
+        Timer.periodic(const Duration(milliseconds: 33), (timer) {
       safetyProvider.processFrame(null, settingsProvider.config, audioProvider);
     });
   }
@@ -76,11 +80,11 @@ class _CameraScreenState extends State<CameraScreen> {
     _stopSimulationLoop();
     final cameraProvider = Provider.of<CameraProvider>(context, listen: false);
     cameraProvider.disposeCamera();
-    
+
     // Stop any ongoing speaking alert
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
     audioProvider.stop();
-    
+
     super.dispose();
   }
 
@@ -90,8 +94,6 @@ class _CameraScreenState extends State<CameraScreen> {
     final cameraProvider = Provider.of<CameraProvider>(context);
     final settingsProvider = Provider.of<SettingsProvider>(context);
     final audioProvider = Provider.of<AudioProvider>(context);
-
-    final size = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -111,22 +113,26 @@ class _CameraScreenState extends State<CameraScreen> {
                         children: [
                           Icon(
                             Icons.videocam_off_rounded,
-                            color: AppColors.textMuted.withOpacity(0.4),
+                            color: AppColors.textMuted.withValues(alpha: 0.4),
                             size: 64.0,
                           ),
                           const SizedBox(height: 12.0),
                           Text(
                             'Simulation Mode Active',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
                                   color: AppColors.textSecondary,
                                   fontWeight: FontWeight.bold,
                                 ),
                           ),
                           Text(
                             'Rendering virtual traffic scenario...',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.textMuted,
-                                ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: AppColors.textMuted,
+                                    ),
                           ),
                         ],
                       ),
@@ -179,7 +185,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12.0),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
+                        color: Colors.black.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(12.0),
                         border: Border.all(color: AppColors.glassBorder),
                       ),
@@ -187,7 +193,8 @@ class _CameraScreenState extends State<CameraScreen> {
                         child: DropdownButton<MockScenario>(
                           value: safetyProvider.currentScenario,
                           dropdownColor: AppColors.surface,
-                          icon: const Icon(Icons.arrow_drop_down, color: AppColors.textPrimary),
+                          icon: const Icon(Icons.arrow_drop_down,
+                              color: AppColors.textPrimary),
                           items: MockScenario.values.map((sc) {
                             return DropdownMenuItem<MockScenario>(
                               value: sc,
@@ -220,7 +227,9 @@ class _CameraScreenState extends State<CameraScreen> {
                           ? Icons.volume_off_rounded
                           : Icons.volume_up_rounded,
                       audioProvider.isMuted ? 'Unmute' : 'Mute',
-                      color: audioProvider.isMuted ? AppColors.stop : AppColors.safe,
+                      color: audioProvider.isMuted
+                          ? AppColors.stop
+                          : AppColors.safe,
                       onPressed: () {
                         audioProvider.setMuted(!audioProvider.isMuted);
                       },
@@ -248,7 +257,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 Container(
                   padding: const EdgeInsets.all(16.0),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.75),
+                    color: Colors.black.withValues(alpha: 0.75),
                     borderRadius: BorderRadius.circular(16.0),
                     border: Border.all(color: AppColors.glassBorder),
                   ),
@@ -256,7 +265,8 @@ class _CameraScreenState extends State<CameraScreen> {
                     children: [
                       RiskGauge(
                         riskScore: safetyProvider.latestState?.riskScore ?? 0.0,
-                        confidence: safetyProvider.latestState?.confidence ?? 1.0,
+                        confidence:
+                            safetyProvider.latestState?.confidence ?? 1.0,
                       ),
                       const SizedBox(width: 20.0),
                       Expanded(
@@ -273,15 +283,16 @@ class _CameraScreenState extends State<CameraScreen> {
                             ElevatedButton.icon(
                               onPressed: () async {
                                 _stopSimulationLoop();
-                                final report = await safetyProvider.getSessionReport();
-                                if (mounted) {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ReportScreen(report: report),
-                                    ),
-                                  );
-                                }
+                                final report =
+                                    await safetyProvider.getSessionReport();
+                                if (!context.mounted) return;
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ReportScreen(report: report),
+                                  ),
+                                );
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.stop,
@@ -289,12 +300,15 @@ class _CameraScreenState extends State<CameraScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12.0),
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 12.0),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12.0),
                               ),
                               icon: const Icon(Icons.stop_circle_rounded),
                               label: const Text(
                                 'END SESSION',
-                                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.0),
                               ),
                             ),
                           ],
@@ -312,8 +326,9 @@ class _CameraScreenState extends State<CameraScreen> {
                   falseSafeCount: safetyProvider.latestState != null
                       ? safetyProvider.latestState!.riskScore == 0.0
                           ? 0
-                          : safetyProvider.topKThreats.any(
-                              (v) => v.approaching && v.ttcSec < settingsProvider.safeTtcLimitSec)
+                          : safetyProvider.topKThreats.any((v) =>
+                                  v.approaching &&
+                                  v.ttcSec < settingsProvider.safeTtcLimitSec)
                               ? 1
                               : 0
                       : 0, // dynamic count
@@ -338,7 +353,7 @@ class _CameraScreenState extends State<CameraScreen> {
       button: true,
       label: semanticsLabel,
       child: Material(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(12.0),
         child: InkWell(
           onTap: onPressed,

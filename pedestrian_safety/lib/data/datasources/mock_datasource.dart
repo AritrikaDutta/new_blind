@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:ui';
 import '../models/vehicle_info.dart';
 
@@ -35,7 +34,8 @@ class MockDatasource {
     _frameCount = 0;
   }
 
-  List<VehicleInfo> getNextFrameDetections(double width, double height, {double fps = 30.0}) {
+  List<VehicleInfo> getNextFrameDetections(double width, double height,
+      {double fps = 30.0}) {
     _frameCount++;
     final double elapsedSec = _frameCount / fps;
 
@@ -108,7 +108,8 @@ class MockDatasource {
 
         // Horizontal speed in pixels per frame: speedMps * scale_factor
         final double dxPxFrame = 5.0; // Simulated pixel rate
-        final double cx = (elapsedSec * fps * dxPxFrame) % (width + 200.0) - 100.0;
+        final double cx =
+            (elapsedSec * fps * dxPxFrame) % (width + 200.0) - 100.0;
         final double cy = height * 0.6;
 
         final Rect bbox = Rect.fromCenter(
@@ -125,7 +126,8 @@ class MockDatasource {
             classId: 2, // car
             dx: dxPxFrame * fps,
             dA: 0.0,
-            ttcSec: double.infinity, // Horizontal traffic does not directly collide
+            ttcSec:
+                double.infinity, // Horizontal traffic does not directly collide
             distM: dist,
             speedKmh: speedKmh,
             speedMps: speedMps,

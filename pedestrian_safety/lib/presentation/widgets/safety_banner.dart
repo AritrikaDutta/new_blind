@@ -11,7 +11,7 @@ class SafetyBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = stateOutput?.internalState ?? SafetyState.safe;
-    
+
     // Choose colors, icons and texts based on state
     Color cardColor = AppColors.stateBgColor(state.nameString);
     Color contentColor = AppColors.stateColor(state.nameString);
@@ -47,15 +47,15 @@ class SafetyBanner extends StatelessWidget {
       curve: Curves.easeInOut,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: cardColor.withOpacity(0.85),
+        color: cardColor.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(16.0),
         border: Border.all(
-          color: contentColor.withOpacity(0.5),
+          color: contentColor.withValues(alpha: 0.5),
           width: 2.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: contentColor.withOpacity(0.2),
+            color: contentColor.withValues(alpha: 0.2),
             blurRadius: 12.0,
             offset: const Offset(0, 4),
           ),
@@ -66,7 +66,7 @@ class SafetyBanner extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8.0),
             decoration: BoxDecoration(
-              color: contentColor.withOpacity(0.15),
+              color: contentColor.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(

@@ -36,8 +36,8 @@ class SettingsScreen extends StatelessWidget {
             children: [
               // Info Banner
               GlassCard(
-                borderColor: AppColors.accent.withOpacity(0.3),
-                bgColor: AppColors.accent.withOpacity(0.05),
+                borderColor: AppColors.accent.withValues(alpha: 0.3),
+                bgColor: AppColors.accent.withValues(alpha: 0.05),
                 child: Row(
                   children: [
                     const Icon(Icons.info_outline, color: AppColors.accent, size: 24.0),
@@ -200,7 +200,7 @@ class SettingsScreen extends StatelessWidget {
               activeTrackColor: AppColors.accent,
               inactiveTrackColor: AppColors.glassBorder,
               thumbColor: AppColors.textPrimary,
-              overlayColor: AppColors.accent.withOpacity(0.2),
+              overlayColor: AppColors.accent.withValues(alpha: 0.2),
               valueIndicatorColor: AppColors.accent,
             ),
             child: Slider(
@@ -249,7 +249,7 @@ class SettingsScreen extends StatelessWidget {
           value,
           style: const TextStyle(
             color: AppColors.safe,
-            fontWeight: FontWeight.black,
+            fontWeight: FontWeight.w900,
             fontSize: 14.0,
           ),
         ),

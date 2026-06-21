@@ -52,7 +52,7 @@ class _AnimatedStateIndicatorState extends State<AnimatedStateIndicator>
               width: 24.0 * _pulseAnimation.value,
               height: 24.0 * _pulseAnimation.value,
               decoration: BoxDecoration(
-                color: stateColor.withOpacity(0.25),
+                color: stateColor.withValues(alpha: 0.25),
                 shape: BoxShape.circle,
               ),
             ),
@@ -64,7 +64,7 @@ class _AnimatedStateIndicatorState extends State<AnimatedStateIndicator>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: stateColor.withOpacity(0.6),
+                    color: stateColor.withValues(alpha: 0.6),
                     blurRadius: 8.0,
                     spreadRadius: 2.0,
                   ),
