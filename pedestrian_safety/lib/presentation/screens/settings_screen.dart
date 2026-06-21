@@ -225,32 +225,38 @@ class SettingsScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 12.0,
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12.0,
+                ),
               ),
-            ),
-            Text(
-              desc,
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 9.5,
+              Text(
+                desc,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 9.5,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: AppColors.safe,
-            fontWeight: FontWeight.w900,
-            fontSize: 14.0,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              color: AppColors.safe,
+              fontWeight: FontWeight.w900,
+              fontSize: 14.0,
+            ),
           ),
         ),
       ],

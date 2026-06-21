@@ -50,8 +50,9 @@ class CameraProvider with ChangeNotifier {
 
       _controller = CameraController(
         rearCamera,
-        ResolutionPreset.medium,
+        ResolutionPreset.low,  // Smaller frames → faster inference pipeline
         enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.yuv420, // Most efficient format on Android
       );
 
       await _controller!.initialize();
@@ -68,8 +69,8 @@ class CameraProvider with ChangeNotifier {
     if (_controller!.value.isStreamingImages) return;
 
     _controller!.startImageStream((CameraImage image) {
-      // In standalone/mock mode, we pass the image metadata (or just tick the frame)
-      // to process simulated vehicles.
+      // Fire-and-forget: DO NOT await so the camera buffer is released immediately.
+      // The SafetyProvider._isProcessing guard drops frames while busy.
       safetyProvider.processFrame(image, settingsProvider.config, audioProvider);
     });
   }

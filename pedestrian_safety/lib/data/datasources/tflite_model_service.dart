@@ -6,6 +6,109 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import '../models/vehicle_info.dart';
 import './velocity_tracker.dart';
 
+// ─── Background isolate payload ─────────────────────────────────────────────
+/// All data needed to preprocess a CameraImage on a background isolate.
+class _PreprocessPayload {
+  final int width;
+  final int height;
+  final int formatGroup; // ImageFormatGroup.index
+
+  // Plane 0 (Y / BGRA)
+  final Uint8List plane0Bytes;
+  final int plane0RowStride;
+  final int plane0PixelStride;
+
+  // Plane 1 (U) — only used for YUV420
+  final Uint8List? plane1Bytes;
+  final int plane1RowStride;
+  final int plane1PixelStride;
+
+  // Plane 2 (V) — only used for YUV420
+  final Uint8List? plane2Bytes;
+  final int plane2RowStride;
+  final int plane2PixelStride;
+
+  const _PreprocessPayload({
+    required this.width,
+    required this.height,
+    required this.formatGroup,
+    required this.plane0Bytes,
+    required this.plane0RowStride,
+    required this.plane0PixelStride,
+    this.plane1Bytes,
+    required this.plane1RowStride,
+    required this.plane1PixelStride,
+    this.plane2Bytes,
+    required this.plane2RowStride,
+    required this.plane2PixelStride,
+  });
+}
+
+/// Top-level function so it can be passed to [compute].
+Float32List _preprocessOnIsolate(_PreprocessPayload p) {
+  final Float32List buf = Float32List(640 * 640 * 3);
+  final int w = p.width;
+  final int h = p.height;
+  final double scaleX = w / 640.0;
+  final double scaleY = h / 640.0;
+
+  // YUV420 branch
+  if (p.formatGroup == ImageFormatGroup.yuv420.index) {
+    final yBuf = p.plane0Bytes;
+    final uBuf = p.plane1Bytes!;
+    final vBuf = p.plane2Bytes!;
+    final yRowStride = p.plane0RowStride;
+    final uRowStride = p.plane1RowStride;
+    final vRowStride = p.plane2RowStride;
+    final uPixelStride = p.plane1PixelStride;
+    final vPixelStride = p.plane2PixelStride;
+
+    int idx = 0;
+    for (int outY = 0; outY < 640; outY++) {
+      final int srcY = (outY * scaleY).toInt().clamp(0, h - 1);
+      for (int outX = 0; outX < 640; outX++) {
+        final int srcX = (outX * scaleX).toInt().clamp(0, w - 1);
+
+        final int yI = srcY * yRowStride + srcX;
+        if (yI >= yBuf.length) { idx += 3; continue; }
+        final int yV = yBuf[yI];
+
+        final int uvX = srcX >> 1;
+        final int uvY = srcY >> 1;
+        final int uI = uvY * uRowStride + uvX * uPixelStride;
+        final int vI = uvY * vRowStride + uvX * vPixelStride;
+        if (uI >= uBuf.length || vI >= vBuf.length) { idx += 3; continue; }
+        final int uV = uBuf[uI];
+        final int vV = vBuf[vI];
+
+        buf[idx++] = (yV + 1.402 * (vV - 128)).clamp(0, 255) / 255.0;
+        buf[idx++] = (yV - 0.344136 * (uV - 128) - 0.714136 * (vV - 128)).clamp(0, 255) / 255.0;
+        buf[idx++] = (yV + 1.772 * (uV - 128)).clamp(0, 255) / 255.0;
+      }
+    }
+  } else {
+    // BGRA8888 branch
+    final bytes = p.plane0Bytes;
+    final bytesPerRow = p.plane0RowStride;
+    final bpp = p.plane0PixelStride.clamp(1, 4);
+
+    int idx = 0;
+    for (int outY = 0; outY < 640; outY++) {
+      final int srcY = (outY * scaleY).toInt().clamp(0, h - 1);
+      for (int outX = 0; outX < 640; outX++) {
+        final int srcX = (outX * scaleX).toInt().clamp(0, w - 1);
+        final int pi = srcY * bytesPerRow + srcX * bpp;
+        if (pi + 2 >= bytes.length) { idx += 3; continue; }
+        buf[idx++] = bytes[pi + 2] / 255.0; // R
+        buf[idx++] = bytes[pi + 1] / 255.0; // G
+        buf[idx++] = bytes[pi] / 255.0;     // B
+      }
+    }
+  }
+  return buf;
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
 class TfliteModelService {
   static final TfliteModelService _instance = TfliteModelService._internal();
   factory TfliteModelService() => _instance;
@@ -15,13 +118,67 @@ class TfliteModelService {
   final VelocityTracker _tracker = VelocityTracker();
   bool _isLoading = false;
 
+  // ── Frame-drop gate ────────────────────────────────────────────────────────
+  bool _isProcessing = false;                    // true while inference is in flight
+  DateTime _lastInferenceTime = DateTime(1970); // epoch sentinel
+  static const Duration _minInferenceInterval =  // max ~3 inferences/sec
+      Duration(milliseconds: 300);
+
+  /// Which hardware backend is currently running inference.
+  String _activeBackend = 'none';
+  String get activeBackend => _activeBackend;
+
   Future<void> loadModel() async {
     if (_interpreter != null || _isLoading) return;
     _isLoading = true;
     try {
-      // Loading model from assets/models/best.tflite
-      _interpreter = await Interpreter.fromAsset('assets/models/best.tflite');
-      debugPrint('TFLite model loaded successfully.');
+      // ── Tier 1: GPU Delegate ─────────────────────────────────────────────
+      // Uses the phone's GPU (Adreno / Mali). Typically 3–8× faster than CPU.
+      try {
+        final gpuDelegate = GpuDelegateV2(
+          options: GpuDelegateOptionsV2(
+            isPrecisionLossAllowed: true, // FP16 — faster with tiny accuracy loss
+          ),
+        );
+        final opts = InterpreterOptions()..addDelegate(gpuDelegate);
+        _interpreter = await Interpreter.fromAsset(
+          'assets/models/best.tflite',
+          options: opts,
+        );
+        _activeBackend = 'GPU';
+        debugPrint('TFLite: GPU delegate active.');
+        return;
+      } catch (_) {
+        debugPrint('GPU delegate not available, trying NNAPI...');
+      }
+
+      // ── Tier 2: XNNPack Delegate ─────────────────────────────────────────
+      // Uses highly-optimised SIMD kernels (ARM NEON on Android).
+      // Typically 2–3× faster than plain multi-threaded CPU.
+      try {
+        final xnnDelegate = XNNPackDelegate(
+          options: XNNPackDelegateOptions(numThreads: 4),
+        );
+        final opts = InterpreterOptions()..addDelegate(xnnDelegate);
+        _interpreter = await Interpreter.fromAsset(
+          'assets/models/best.tflite',
+          options: opts,
+        );
+        _activeBackend = 'XNNPack';
+        debugPrint('TFLite: XNNPack delegate active.');
+        return;
+      } catch (_) {
+        debugPrint('XNNPack not available, falling back to CPU...');
+      }
+
+      // ── Tier 3: CPU fallback (4 threads) ─────────────────────────────────
+      final opts = InterpreterOptions()..threads = 4;
+      _interpreter = await Interpreter.fromAsset(
+        'assets/models/best.tflite',
+        options: opts,
+      );
+      _activeBackend = 'CPU';
+      debugPrint('TFLite: CPU (4 threads) active.');
     } catch (e) {
       debugPrint('Error loading TFLite model: $e');
     } finally {
@@ -31,17 +188,51 @@ class TfliteModelService {
 
   void reset() {
     _tracker.reset();
+    _isProcessing = false;
+    _lastInferenceTime = DateTime(1970);
   }
 
   Future<List<VehicleInfo>> detect(
+      CameraImage image, double targetWidth, double targetHeight) async {
+    // ── Frame-drop: skip if already processing or too soon ────────────────
+    if (_isProcessing) return [];
+    final now = DateTime.now();
+    if (now.difference(_lastInferenceTime) < _minInferenceInterval) return [];
+
+    _isProcessing = true;
+    _lastInferenceTime = now;
+
+    try {
+      return await _runDetect(image, targetWidth, targetHeight);
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  Future<List<VehicleInfo>> _runDetect(
       CameraImage image, double targetWidth, double targetHeight) async {
     if (_interpreter == null) {
       await loadModel();
       if (_interpreter == null) return [];
     }
 
-    // 1. Preprocess CameraImage to flat Float32List normalized to [0, 1]
-    final Float32List inputBuffer = _preprocessCameraImage(image);
+    // 1. Preprocess on a background isolate so the UI thread stays smooth
+    final p = _PreprocessPayload(
+      width: image.width,
+      height: image.height,
+      formatGroup: image.format.group.index,
+      plane0Bytes: image.planes[0].bytes,
+      plane0RowStride: image.planes[0].bytesPerRow,
+      plane0PixelStride: image.planes[0].bytesPerPixel ?? 1,
+      plane1Bytes: image.planes.length > 1 ? image.planes[1].bytes : null,
+      plane1RowStride: image.planes.length > 1 ? image.planes[1].bytesPerRow : 0,
+      plane1PixelStride: image.planes.length > 1 ? (image.planes[1].bytesPerPixel ?? 1) : 1,
+      plane2Bytes: image.planes.length > 2 ? image.planes[2].bytes : null,
+      plane2RowStride: image.planes.length > 2 ? image.planes[2].bytesPerRow : 0,
+      plane2PixelStride: image.planes.length > 2 ? (image.planes[2].bytesPerPixel ?? 1) : 1,
+    );
+
+    final Float32List inputBuffer = await compute(_preprocessOnIsolate, p);
 
     // 2. Reshape input to [1, 640, 640, 3]
     final List<dynamic> input = inputBuffer.reshape([1, 640, 640, 3]);
@@ -85,8 +276,8 @@ class TfliteModelService {
         }
       }
 
-      // Confidence threshold
-      if (maxScore > 0.25) {
+      // Confidence threshold — raised to 0.35 to prune weak candidates early
+      if (maxScore > 0.35) {
         final double cx = modelOutput[0][i];
         final double cy = modelOutput[1][i];
         final double w = modelOutput[2][i];
@@ -159,95 +350,8 @@ class TfliteModelService {
     return vehicleInfos;
   }
 
-  Float32List _preprocessCameraImage(CameraImage image) {
-    final int width = image.width;
-    final int height = image.height;
-    final Float32List inputBuffer = Float32List(640 * 640 * 3);
-
-    // Check format group
-    if (image.format.group == ImageFormatGroup.yuv420) {
-      final yPlane = image.planes[0];
-      final uPlane = image.planes[1];
-      final vPlane = image.planes[2];
-
-      final yBuffer = yPlane.bytes;
-      final uBuffer = uPlane.bytes;
-      final vBuffer = vPlane.bytes;
-
-      final int yRowStride = yPlane.bytesPerRow;
-      final int uRowStride = uPlane.bytesPerRow;
-      final int vRowStride = vPlane.bytesPerRow;
-
-      final int? uPixelStride = uPlane.bytesPerPixel;
-      final int? vPixelStride = vPlane.bytesPerPixel;
-
-      final double scaleX = width / 640.0;
-      final double scaleY = height / 640.0;
-
-      int bufferIdx = 0;
-      for (int outY = 0; outY < 640; outY++) {
-        final int srcY = (outY * scaleY).toInt().clamp(0, height - 1);
-        for (int outX = 0; outX < 640; outX++) {
-          final int srcX = (outX * scaleX).toInt().clamp(0, width - 1);
-
-          final int yIndex = srcY * yRowStride + srcX;
-          if (yIndex >= yBuffer.length) continue;
-          final int yValue = yBuffer[yIndex];
-
-          final int uvSrcX = srcX >> 1;
-          final int uvSrcY = srcY >> 1;
-
-          final int uIndex = uvSrcY * uRowStride + uvSrcX * (uPixelStride ?? 1);
-          final int vIndex = uvSrcY * vRowStride + uvSrcX * (vPixelStride ?? 1);
-
-          if (uIndex >= uBuffer.length || vIndex >= vBuffer.length) continue;
-          final int uValue = uBuffer[uIndex];
-          final int vValue = vBuffer[vIndex];
-
-          // YUV to RGB conversion (SDTV/BT.601)
-          final double r = (yValue + 1.402 * (vValue - 128)).clamp(0.0, 255.0);
-          final double g =
-              (yValue - 0.344136 * (uValue - 128) - 0.714136 * (vValue - 128))
-                  .clamp(0.0, 255.0);
-          final double b = (yValue + 1.772 * (uValue - 128)).clamp(0.0, 255.0);
-
-          inputBuffer[bufferIdx++] = r / 255.0;
-          inputBuffer[bufferIdx++] = g / 255.0;
-          inputBuffer[bufferIdx++] = b / 255.0;
-        }
-      }
-    } else {
-      // Default / BGRA8888
-      final plane = image.planes[0];
-      final bytes = plane.bytes;
-      final int bytesPerRow = plane.bytesPerRow;
-      final int? bytesPerPixel = plane.bytesPerPixel;
-      final int bpp = bytesPerPixel ?? 4;
-
-      final double scaleX = width / 640.0;
-      final double scaleY = height / 640.0;
-
-      int bufferIdx = 0;
-      for (int outY = 0; outY < 640; outY++) {
-        final int srcY = (outY * scaleY).toInt().clamp(0, height - 1);
-        for (int outX = 0; outX < 640; outX++) {
-          final int srcX = (outX * scaleX).toInt().clamp(0, width - 1);
-
-          final int pixelIndex = srcY * bytesPerRow + srcX * bpp;
-          if (pixelIndex + 2 >= bytes.length) continue;
-
-          final double b = bytes[pixelIndex].toDouble();
-          final double g = bytes[pixelIndex + 1].toDouble();
-          final double r = bytes[pixelIndex + 2].toDouble();
-
-          inputBuffer[bufferIdx++] = r / 255.0;
-          inputBuffer[bufferIdx++] = g / 255.0;
-          inputBuffer[bufferIdx++] = b / 255.0;
-        }
-      }
-    }
-    return inputBuffer;
-  }
+  // _preprocessCameraImage removed — preprocessing is now handled by the
+  // top-level _preprocessOnIsolate() function via compute().
 
   List<(int classId, double confidence, Rect bbox)> _runNMS(
     List<(int classId, double confidence, Rect bbox)> candidates,

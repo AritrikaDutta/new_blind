@@ -78,12 +78,15 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void dispose() {
     _stopSimulationLoop();
+
+    // Flag the pipeline as stopped FIRST so any in-flight inference discards
+    // its callbacks (TTS / haptics / notifyListeners) before they fire
+    final safetyProvider = Provider.of<SafetyProvider>(context, listen: false);
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    safetyProvider.stop(audioProvider); // non-blocking fire-and-forget
+
     final cameraProvider = Provider.of<CameraProvider>(context, listen: false);
     cameraProvider.disposeCamera();
-
-    // Stop any ongoing speaking alert
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-    audioProvider.stop();
 
     super.dispose();
   }
@@ -178,7 +181,12 @@ class _CameraScreenState extends State<CameraScreen> {
                       context,
                       Icons.arrow_back_ios_new_rounded,
                       'Back',
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () async {
+                        _stopSimulationLoop();
+                        cameraProvider.stopStreaming();
+                        await safetyProvider.stop(audioProvider);
+                        if (context.mounted) Navigator.pop(context);
+                      },
                     ),
 
                     // Scenario drop-down selector
@@ -282,7 +290,11 @@ class _CameraScreenState extends State<CameraScreen> {
                             const SizedBox(height: 12.0),
                             ElevatedButton.icon(
                               onPressed: () async {
+                                // Stop everything FIRST before navigating
                                 _stopSimulationLoop();
+                                cameraProvider.stopStreaming();
+                                await safetyProvider.stop(audioProvider);
+
                                 final report =
                                     await safetyProvider.getSessionReport();
                                 if (!context.mounted) return;

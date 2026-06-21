@@ -13,17 +13,13 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          image: DecorationImage(
-            image: AssetImage(
-                'assets/images/bg_grid.png'), // Fallback background pattern
-            fit: BoxFit.cover,
-            opacity: 0.05,
+      body: Stack(
+        children: [
+          // Programmatic grid background — no image file required
+          Positioned.fill(
+            child: CustomPaint(painter: _GridPainter()),
           ),
-        ),
-        child: SafeArea(
+          SafeArea(
           child: Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -36,15 +32,18 @@ class HomeScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const AnimatedStateIndicator(state: SafetyState.safe),
-                    const SizedBox(width: 12.0),
-                    Text(
-                      '🚦 CROSSING ASSIST',
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.0,
-                              ),
+                    const SizedBox(width: 10.0),
+                    Flexible(
+                      child: Text(
+                        '🚦 CROSSING ASSIST',
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 20.0,
+                              letterSpacing: 1.5,
+                            ),
+                      ),
                     ),
                   ],
                 ),
@@ -227,7 +226,35 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+        ],  // Stack children
       ),
     );
   }
+}
+
+/// Draws a subtle dot-grid pattern directly on the canvas.
+/// Replaces the missing assets/images/bg_grid.png with zero disk I/O.
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Fill background
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = AppColors.background,
+    );
+    // Dot grid
+    final dotPaint = Paint()
+      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.04)
+      ..style = PaintingStyle.fill;
+    const double spacing = 28.0;
+    const double radius = 1.2;
+    for (double x = 0; x < size.width; x += spacing) {
+      for (double y = 0; y < size.height; y += spacing) {
+        canvas.drawCircle(Offset(x, y), radius, dotPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

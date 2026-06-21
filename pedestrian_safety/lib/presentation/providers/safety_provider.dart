@@ -12,6 +12,12 @@ class SafetyProvider with ChangeNotifier {
   final SafetyRepositoryImpl _repository = SafetyRepositoryImpl();
   final HapticService _hapticService = HapticService();
 
+  // Guard: skip incoming frames while the previous inference is still running
+  bool _isProcessing = false;
+
+  // Lifecycle: flipped to true on stop() to discard any in-flight callbacks
+  bool _stopped = false;
+
   List<Vehicle> get activeVehicles => _repository.getActiveVehicles();
   List<Vehicle> get topKThreats => _repository.getTopKThreats();
   StateOutput? get latestState => _repository.getLatestState();
@@ -25,25 +31,41 @@ class SafetyProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> processFrame(dynamic frame, CrossingConfig config, AudioProvider audioProvider) async {
-    await _repository.processFrame(frame, config);
-    
-    final stateOut = _repository.getLatestState();
-    if (stateOut != null) {
-      // Trigger voice alert (with cooldown de-duplication handled by AudioProvider)
-      await audioProvider.speakStateAlert(
-        stateOut.internalState.nameString,
-        stateOut.fullSpoken,
-      );
+  /// Hard-stop: cancels all in-flight work immediately.
+  /// Call this BEFORE navigating away from CameraScreen.
+  Future<void> stop(AudioProvider audioProvider) async {
+    _stopped = true;
+    _isProcessing = false;
+    await audioProvider.stop();
+  }
 
-      // Trigger tactile haptics
-      await _hapticService.triggerForState(stateOut.internalState);
+  Future<void> processFrame(
+      dynamic frame, CrossingConfig config, AudioProvider audioProvider) async {
+    // Drop this frame if stopped or still processing the previous one
+    if (_stopped || _isProcessing) return;
+    _isProcessing = true;
+    try {
+      await _repository.processFrame(frame, config);
+      if (_stopped) return; // session ended while inference was running
+
+      final stateOut = _repository.getLatestState();
+      if (stateOut != null) {
+        // Fire TTS/haptics as fire-and-forget so they never block the pipeline
+        audioProvider.speakStateAlert(
+          stateOut.internalState.nameString,
+          stateOut.fullSpoken,
+        );
+        _hapticService.triggerForState(stateOut.internalState);
+      }
+
+      if (!_stopped) notifyListeners();
+    } finally {
+      _isProcessing = false;
     }
-    
-    notifyListeners();
   }
 
   Future<void> reset() async {
+    _stopped = false;
     await _repository.reset();
     notifyListeners();
   }
