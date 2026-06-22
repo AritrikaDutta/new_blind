@@ -4,7 +4,7 @@ import '../../data/models/safety_report.dart';
 import '../entities/vehicle.dart';
 
 abstract class SafetyRepository {
-  Future<void> processFrame(dynamic frame, CrossingConfig config);
+  Future<bool> processFrame(dynamic frame, CrossingConfig config);
   Future<void> reset();
   Future<SafetyReport> getSessionReport();
   List<Vehicle> getActiveVehicles();

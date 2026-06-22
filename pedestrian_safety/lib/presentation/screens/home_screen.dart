@@ -20,12 +20,11 @@ class HomeScreen extends StatelessWidget {
             child: CustomPaint(painter: _GridPainter()),
           ),
           SafeArea(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 // Header Block
                 const SizedBox(height: 24.0),
                 Row(
@@ -56,7 +55,7 @@ class HomeScreen extends StatelessWidget {
                         fontSize: 12.0,
                       ),
                 ),
-                const Spacer(),
+                const SizedBox(height: 48.0),
 
                 // Mode Cards
                 Semantics(
@@ -196,7 +195,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
 
-                const Spacer(),
+                const SizedBox(height: 48.0),
 
                 // Bottom Tagline
                 Row(

@@ -115,6 +115,7 @@ class TfliteModelService {
   TfliteModelService._internal();
 
   Interpreter? _interpreter;
+  IsolateInterpreter? _isolateInterpreter;
   final VelocityTracker _tracker = VelocityTracker();
   bool _isLoading = false;
 
@@ -145,11 +146,12 @@ class TfliteModelService {
           'assets/models/best.tflite',
           options: opts,
         );
+        _isolateInterpreter = await IsolateInterpreter.create(address: _interpreter!.address);
         _activeBackend = 'GPU';
-        debugPrint('TFLite: GPU delegate active.');
+        debugPrint('TFLite: GPU delegate active (via IsolateInterpreter).');
         return;
-      } catch (_) {
-        debugPrint('GPU delegate not available, trying NNAPI...');
+      } catch (e) {
+        debugPrint('GPU delegate not available, trying NNAPI... $e');
       }
 
       // ── Tier 2: XNNPack Delegate ─────────────────────────────────────────
@@ -164,11 +166,12 @@ class TfliteModelService {
           'assets/models/best.tflite',
           options: opts,
         );
+        _isolateInterpreter = await IsolateInterpreter.create(address: _interpreter!.address);
         _activeBackend = 'XNNPack';
-        debugPrint('TFLite: XNNPack delegate active.');
+        debugPrint('TFLite: XNNPack delegate active (via IsolateInterpreter).');
         return;
-      } catch (_) {
-        debugPrint('XNNPack not available, falling back to CPU...');
+      } catch (e) {
+        debugPrint('XNNPack not available, falling back to CPU... $e');
       }
 
       // ── Tier 3: CPU fallback (4 threads) ─────────────────────────────────
@@ -177,8 +180,9 @@ class TfliteModelService {
         'assets/models/best.tflite',
         options: opts,
       );
+      _isolateInterpreter = await IsolateInterpreter.create(address: _interpreter!.address);
       _activeBackend = 'CPU';
-      debugPrint('TFLite: CPU (4 threads) active.');
+      debugPrint('TFLite: CPU (4 threads) active (via IsolateInterpreter).');
     } catch (e) {
       debugPrint('Error loading TFLite model: $e');
     } finally {
@@ -192,12 +196,12 @@ class TfliteModelService {
     _lastInferenceTime = DateTime(1970);
   }
 
-  Future<List<VehicleInfo>> detect(
+  Future<List<VehicleInfo>?> detect(
       CameraImage image, double targetWidth, double targetHeight) async {
     // ── Frame-drop: skip if already processing or too soon ────────────────
-    if (_isProcessing) return [];
+    if (_isProcessing) return null;
     final now = DateTime.now();
-    if (now.difference(_lastInferenceTime) < _minInferenceInterval) return [];
+    if (now.difference(_lastInferenceTime) < _minInferenceInterval) return null;
 
     _isProcessing = true;
     _lastInferenceTime = now;
@@ -209,145 +213,175 @@ class TfliteModelService {
     }
   }
 
-  Future<List<VehicleInfo>> _runDetect(
+  Future<List<VehicleInfo>?> _runDetect(
       CameraImage image, double targetWidth, double targetHeight) async {
-    if (_interpreter == null) {
-      await loadModel();
-      if (_interpreter == null) return [];
-    }
-
-    // 1. Preprocess on a background isolate so the UI thread stays smooth
-    final p = _PreprocessPayload(
-      width: image.width,
-      height: image.height,
-      formatGroup: image.format.group.index,
-      plane0Bytes: image.planes[0].bytes,
-      plane0RowStride: image.planes[0].bytesPerRow,
-      plane0PixelStride: image.planes[0].bytesPerPixel ?? 1,
-      plane1Bytes: image.planes.length > 1 ? image.planes[1].bytes : null,
-      plane1RowStride: image.planes.length > 1 ? image.planes[1].bytesPerRow : 0,
-      plane1PixelStride: image.planes.length > 1 ? (image.planes[1].bytesPerPixel ?? 1) : 1,
-      plane2Bytes: image.planes.length > 2 ? image.planes[2].bytes : null,
-      plane2RowStride: image.planes.length > 2 ? image.planes[2].bytesPerRow : 0,
-      plane2PixelStride: image.planes.length > 2 ? (image.planes[2].bytesPerPixel ?? 1) : 1,
-    );
-
-    final Float32List inputBuffer = await compute(_preprocessOnIsolate, p);
-
-    // 2. Reshape input to [1, 640, 640, 3]
-    final List<dynamic> input = inputBuffer.reshape([1, 640, 640, 3]);
-
-    // 3. Allocate output tensor: [1, 12, 8400]
-    final List<dynamic> output = List.generate(
-      1,
-      (_) => List.generate(
-        12,
-        (_) => List.filled(8400, 0.0),
-      ),
-    );
-
-    // 4. Run inference
     try {
-      _interpreter!.run(input, output);
-    } catch (e) {
-      debugPrint('Error running TFLite inference: $e');
-      return [];
-    }
+      if (_interpreter == null) {
+        await loadModel();
+        if (_interpreter == null) return null;
+      }
 
-    // 5. Decode outputs: [1, 12, 8400]
-    // Out shape is:
-    // row 0-3: cx, cy, w, h (in 640x640 coordinate space)
-    // row 4-11: scores for 8 classes (bicycle, bus, car, dog, motorcycle, person, scooty, toto)
-    final List<(int classId, double confidence, Rect bbox)> candidates = [];
+      // 1. Preprocess on a background isolate so the UI thread stays smooth
+      final p = _PreprocessPayload(
+        width: image.width,
+        height: image.height,
+        formatGroup: image.format.group.index,
+        plane0Bytes: image.planes[0].bytes,
+        plane0RowStride: image.planes[0].bytesPerRow,
+        plane0PixelStride: image.planes[0].bytesPerPixel ?? 1,
+        plane1Bytes: image.planes.length > 1 ? image.planes[1].bytes : null,
+        plane1RowStride: image.planes.length > 1 ? image.planes[1].bytesPerRow : 0,
+        plane1PixelStride: image.planes.length > 1 ? (image.planes[1].bytesPerPixel ?? 1) : 1,
+        plane2Bytes: image.planes.length > 2 ? image.planes[2].bytes : null,
+        plane2RowStride: image.planes.length > 2 ? image.planes[2].bytesPerRow : 0,
+        plane2PixelStride: image.planes.length > 2 ? (image.planes[2].bytesPerPixel ?? 1) : 1,
+      );
 
-    // Grab outputs from nested list
-    final List<List<double>> modelOutput =
-        (output[0] as List).map((e) => (e as List).cast<double>()).toList();
+      final Float32List inputBuffer = await compute(_preprocessOnIsolate, p);
 
-    for (int i = 0; i < 8400; i++) {
-      // Find class with max score
-      int maxClassId = -1;
-      double maxScore = -1.0;
-      for (int c = 0; c < 8; c++) {
-        final double score = modelOutput[4 + c][i];
-        if (score > maxScore) {
-          maxScore = score;
-          maxClassId = c;
+      // 2. Reshape input to [1, 640, 640, 3]
+      final List<dynamic> input = inputBuffer.reshape([1, 640, 640, 3]);
+
+      // 3. Allocate output tensor: [1, 12, 8400]
+      final List<dynamic> output = List.generate(
+        1,
+        (_) => List.generate(
+          12,
+          (_) => List.filled(8400, 0.0),
+        ),
+      );
+
+      // 4. Run inference
+      await _isolateInterpreter!.run(input, output);
+
+      // 5. Decode outputs: [1, 12, 8400]
+      // Out shape is:
+      // row 0-3: cx, cy, w, h (in 640x640 coordinate space)
+      // row 4-11: scores for 8 classes (bicycle, bus, car, dog, motorcycle, person, scooty, toto)
+      final List<(int classId, double confidence, Rect bbox)> candidates = [];
+
+      // Grab outputs from nested list
+      final List<List<double>> modelOutput =
+          (output[0] as List).map((e) => (e as List).cast<double>()).toList();
+
+      for (int i = 0; i < 8400; i++) {
+        // Find class with max score
+        int maxClassId = -1;
+        double maxScore = -1.0;
+        for (int c = 0; c < 8; c++) {
+          final double score = modelOutput[4 + c][i];
+          if (score > maxScore) {
+            maxScore = score;
+            maxClassId = c;
+          }
+        }
+
+        // Confidence threshold — raised to 0.35 to prune weak candidates early
+        if (maxScore > 0.35) {
+          final double cx = modelOutput[0][i];
+          final double cy = modelOutput[1][i];
+          final double w = modelOutput[2][i];
+          final double h = modelOutput[3][i];
+
+          // Convert center coordinates to bounding box LTWH
+          final double left = cx - w / 2.0;
+          final double top = cy - h / 2.0;
+
+          candidates.add((
+            maxClassId,
+            maxScore,
+            Rect.fromLTWH(left, top, w, h),
+          ));
         }
       }
 
-      // Confidence threshold — raised to 0.35 to prune weak candidates early
-      if (maxScore > 0.35) {
-        final double cx = modelOutput[0][i];
-        final double cy = modelOutput[1][i];
-        final double w = modelOutput[2][i];
-        final double h = modelOutput[3][i];
+      // 6. Run Non-Maximum Suppression (NMS)
+      final List<(int classId, double confidence, Rect bbox)> nmsDetections =
+          _runNMS(candidates, 0.45);
 
-        // Convert center coordinates to bounding box LTWH
-        final double left = cx - w / 2.0;
-        final double top = cy - h / 2.0;
-
-        candidates.add((
-          maxClassId,
-          maxScore,
-          Rect.fromLTWH(left, top, w, h),
-        ));
+      // 7. Rescale NMS bounding boxes to target dimensions (targetWidth x targetHeight)
+      // The original model coordinates are in 640x640 space.
+      // We first rescale to 640x480 (landscape sensor space) to preserve correct proportions,
+      // and then rotate 90 degrees clockwise to 480x640 screen space if we are in portrait mode.
+      bool isPortrait = true;
+      try {
+        final view = PlatformDispatcher.instance.views.first;
+        isPortrait = view.physicalSize.width < view.physicalSize.height;
+      } catch (_) {
+        // Fallback to portrait
       }
+
+      final List<(int classId, double confidence, Rect bbox)> rescaledDetections =
+          nmsDetections.map((det) {
+        final int classId = det.$1;
+        final double confidence = det.$2;
+        final Rect bbox = det.$3;
+
+        // 1. Rescale from 640x640 to 640x480 landscape sensor space
+        final double sensorLeft = bbox.left;
+        final double sensorRight = bbox.right;
+        final double sensorTop = bbox.top * 0.75;
+        final double sensorBottom = bbox.bottom * 0.75;
+
+        Rect mappedBbox;
+        if (isPortrait) {
+          // 2. Rotate 90 degrees clockwise to 480x640 space
+          final double rotatedLeft = 480.0 - sensorBottom;
+          final double rotatedTop = sensorLeft;
+          final double rotatedRight = 480.0 - sensorTop;
+          final double rotatedBottom = sensorRight;
+
+          // 3. Scale from 480x640 to targetWidth x targetHeight
+          mappedBbox = Rect.fromLTRB(
+            rotatedLeft * (targetWidth / 480.0),
+            rotatedTop * (targetHeight / 640.0),
+            rotatedRight * (targetWidth / 480.0),
+            rotatedBottom * (targetHeight / 640.0),
+          );
+        } else {
+          // 2. Scale from 640x480 to targetWidth x targetHeight
+          mappedBbox = Rect.fromLTRB(
+            sensorLeft * (targetWidth / 640.0),
+            sensorTop * (targetHeight / 480.0),
+            sensorRight * (targetWidth / 640.0),
+            sensorBottom * (targetHeight / 480.0),
+          );
+        }
+
+        return (classId, confidence, mappedBbox);
+      }).toList();
+
+      // 8. Update Velocity Tracker and get tracking estimates
+      final List<TrackedVehicleEstimate> estimates =
+          _tracker.update(rescaledDetections);
+
+      // 9. Map estimates to VehicleInfo entities
+      final List<VehicleInfo> vehicleInfos = estimates.map((est) {
+        return VehicleInfo(
+          trackId: est.trackId,
+          classId: est.classId,
+          dx: est.approaching
+              ? 1.0
+              : (est.retreating ? -1.0 : 0.0), // simplified frame delta
+          dA: est.approaching ? 1.0 : (est.retreating ? -1.0 : 0.0),
+          ttcSec: est.ttcSec,
+          distM: est.distM,
+          speedKmh: est.speedKmh,
+          speedMps: est.speedMps,
+          cx: est.bbox.center.dx,
+          approaching: est.approaching,
+          retreating: est.retreating,
+          direction: est.direction,
+          motionAxis: est.motionAxis,
+          bbox: est.bbox,
+        );
+      }).toList();
+
+      return vehicleInfos;
+    } catch (e) {
+      debugPrint('Error during detection pipeline: $e');
+      return null;
     }
-
-    // 6. Run Non-Maximum Suppression (NMS)
-    final List<(int classId, double confidence, Rect bbox)> nmsDetections =
-        _runNMS(candidates, 0.45);
-
-    // 7. Rescale NMS bounding boxes to target dimensions (targetWidth x targetHeight)
-    // The original model coordinates are in 640x640 space.
-    final List<(int classId, double confidence, Rect bbox)> rescaledDetections =
-        nmsDetections.map((det) {
-      final int classId = det.$1;
-      final double confidence = det.$2;
-      final Rect bbox = det.$3;
-
-      // Rescale from 640x640 to targetWidth x targetHeight
-      final double scaleX = targetWidth / 640.0;
-      final double scaleY = targetHeight / 640.0;
-
-      final Rect scaledBbox = Rect.fromLTRB(
-        bbox.left * scaleX,
-        bbox.top * scaleY,
-        bbox.right * scaleX,
-        bbox.bottom * scaleY,
-      );
-
-      return (classId, confidence, scaledBbox);
-    }).toList();
-
-    // 8. Update Velocity Tracker and get tracking estimates
-    final List<TrackedVehicleEstimate> estimates =
-        _tracker.update(rescaledDetections);
-
-    // 9. Map estimates to VehicleInfo entities
-    final List<VehicleInfo> vehicleInfos = estimates.map((est) {
-      return VehicleInfo(
-        trackId: est.trackId,
-        classId: est.classId,
-        dx: est.approaching
-            ? 1.0
-            : (est.retreating ? -1.0 : 0.0), // simplified frame delta
-        dA: est.approaching ? 1.0 : (est.retreating ? -1.0 : 0.0),
-        ttcSec: est.ttcSec,
-        distM: est.distM,
-        speedKmh: est.speedKmh,
-        speedMps: est.speedMps,
-        cx: est.bbox.center.dx,
-        approaching: est.approaching,
-        retreating: est.retreating,
-        direction: est.direction,
-        motionAxis: est.motionAxis,
-        bbox: est.bbox,
-      );
-    }).toList();
-
-    return vehicleInfos;
   }
 
   // _preprocessCameraImage removed — preprocessing is now handled by the

@@ -75,15 +75,19 @@ class CameraProvider with ChangeNotifier {
     });
   }
 
-  void stopStreaming() {
+  Future<void> stopStreaming() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
     if (!_controller!.value.isStreamingImages) return;
-    _controller!.stopImageStream();
+    try {
+      await _controller!.stopImageStream();
+    } catch (e) {
+      debugPrint('Error stopping image stream: $e');
+    }
   }
 
   Future<void> disposeCamera() async {
     if (_controller != null) {
-      stopStreaming();
+      await stopStreaming();
       await _controller!.dispose();
       _controller = null;
       notifyListeners();

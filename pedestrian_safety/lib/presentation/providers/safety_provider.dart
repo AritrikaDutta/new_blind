@@ -45,8 +45,8 @@ class SafetyProvider with ChangeNotifier {
     if (_stopped || _isProcessing) return;
     _isProcessing = true;
     try {
-      await _repository.processFrame(frame, config);
-      if (_stopped) return; // session ended while inference was running
+      final wasProcessed = await _repository.processFrame(frame, config);
+      if (_stopped || !wasProcessed) return; // session ended or frame skipped
 
       final stateOut = _repository.getLatestState();
       if (stateOut != null) {

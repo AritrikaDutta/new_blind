@@ -17,7 +17,7 @@ class ReportScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -80,7 +80,8 @@ class ReportScreen extends StatelessWidget {
               const SizedBox(height: 24.0),
 
               // Timeline graph card
-              Expanded(
+              SizedBox(
+                height: 240.0,
                 child: GlassCard(
                   borderColor: AppColors.glassBorder,
                   child: Column(

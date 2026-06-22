@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import '../../core/constants/safety_constants.dart';
 import '../../domain/entities/safety_state.dart';
@@ -47,7 +48,7 @@ class SafetyRepositoryImpl implements SafetyRepository {
   MockScenario get currentScenario => _scenario;
 
   @override
-  Future<void> processFrame(dynamic frame, CrossingConfig config) async {
+  Future<bool> processFrame(dynamic frame, CrossingConfig config) async {
     // Calculate FPS and performance tier
     final now = DateTime.now();
     if (_lastFrameTime != null) {
@@ -69,13 +70,17 @@ class SafetyRepositoryImpl implements SafetyRepository {
       _tier = 3;
     }
 
-    // Get frame dimensions
-    double width = 640.0;
-    double height = 480.0;
-    if (frame is CameraImage) {
-      width = frame.width.toDouble();
-      height = frame.height.toDouble();
+    // Get frame dimensions dynamically based on screen orientation
+    bool isPortrait = true;
+    try {
+      final view = PlatformDispatcher.instance.views.first;
+      isPortrait = view.physicalSize.width < view.physicalSize.height;
+    } catch (_) {
+      // Fallback to portrait
     }
+
+    final double width = isPortrait ? 480.0 : 640.0;
+    final double height = isPortrait ? 640.0 : 480.0;
 
     // Define zones
     final Map<String, Zone> zones = Zone.defineZones(width, height);
@@ -84,7 +89,12 @@ class SafetyRepositoryImpl implements SafetyRepository {
     // 1. Get raw/mock detections
     List<VehicleInfo> vehicleInfos;
     if (frame is CameraImage) {
-      vehicleInfos = await _tfliteModelService.detect(frame, width, height);
+      final detections = await _tfliteModelService.detect(frame, width, height);
+      if (detections == null) {
+        // Frame skipped to prevent pipeline backup/lag
+        return false;
+      }
+      vehicleInfos = detections;
     } else {
       vehicleInfos = _mockDatasource.getNextFrameDetections(width, height, fps: _fps);
     }
@@ -160,6 +170,7 @@ class SafetyRepositoryImpl implements SafetyRepository {
     _activeVehicles = vehicleInfos.map((v) => v.toEntity()).toList();
     _topKThreats = topKInfos.map((v) => v.toEntity()).toList();
     _latestState = stateOut;
+    return true;
   }
 
   @override
