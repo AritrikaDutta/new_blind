@@ -156,6 +156,30 @@ class ReportScreen extends StatelessWidget {
     required Color color,
     bool isHorizontal = false,
   }) {
+    final textColumn = Column(
+      crossAxisAlignment: isHorizontal
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        Text(
+          title,
+          textAlign: isHorizontal ? TextAlign.left : TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 10.5,
+              ),
+        ),
+      ],
+    );
+
     final content = [
       Container(
         padding: const EdgeInsets.all(12.0),
@@ -169,31 +193,7 @@ class ReportScreen extends StatelessWidget {
         const SizedBox(height: 16.0)
       else
         const SizedBox(width: 20.0),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: isHorizontal
-              ? CrossAxisAlignment.start
-              : CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w900,
-                  ),
-            ),
-            Text(
-              title,
-              textAlign: isHorizontal ? TextAlign.left : TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 10.5,
-                  ),
-            ),
-          ],
-        ),
-      ),
+      isHorizontal ? Expanded(child: textColumn) : textColumn,
     ];
 
     return GlassCard(

@@ -15,6 +15,8 @@ import '../widgets/ttc_progress_bar.dart';
 import '../widgets/zone_overlay.dart';
 import '../widgets/vehicle_badge.dart';
 import 'report_screen.dart';
+import '../../data/models/state_output.dart';
+import '../../domain/entities/safety_state.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -26,6 +28,18 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   Timer? _simulationTimer;
   bool _isSimulating = true;
+
+  late SafetyProvider _safetyProvider;
+  late AudioProvider _audioProvider;
+  late CameraProvider _cameraProvider;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _safetyProvider = Provider.of<SafetyProvider>(context, listen: false);
+    _audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    _cameraProvider = Provider.of<CameraProvider>(context, listen: false);
+  }
 
   @override
   void initState() {
@@ -81,12 +95,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
     // Flag the pipeline as stopped FIRST so any in-flight inference discards
     // its callbacks (TTS / haptics / notifyListeners) before they fire
-    final safetyProvider = Provider.of<SafetyProvider>(context, listen: false);
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-    safetyProvider.stop(audioProvider); // non-blocking fire-and-forget
-
-    final cameraProvider = Provider.of<CameraProvider>(context, listen: false);
-    cameraProvider.disposeCamera();
+    _safetyProvider.stop(_audioProvider); // non-blocking fire-and-forget
+    _cameraProvider.disposeCamera();
 
     super.dispose();
   }
@@ -158,8 +168,14 @@ class _CameraScreenState extends State<CameraScreen> {
                       topKThreats: safetyProvider.topKThreats,
                       width: w,
                       height: h,
-                      originalWidth: MediaQuery.of(context).orientation == Orientation.portrait ? 480.0 : 640.0,
-                      originalHeight: MediaQuery.of(context).orientation == Orientation.portrait ? 640.0 : 480.0,
+                      originalWidth: MediaQuery.of(context).orientation ==
+                              Orientation.portrait
+                          ? 480.0
+                          : 640.0,
+                      originalHeight: MediaQuery.of(context).orientation ==
+                              Orientation.portrait
+                          ? 640.0
+                          : 480.0,
                     ),
                   ],
                 );
@@ -171,7 +187,9 @@ class _CameraScreenState extends State<CameraScreen> {
           Positioned(
             top: MediaQuery.of(context).padding.top + 8.0,
             left: 16.0,
-            right: 16.0,
+            right: MediaQuery.of(context).orientation == Orientation.landscape
+                ? MediaQuery.of(context).size.width * 0.5
+                : 16.0,
             child: OrientationBuilder(
               builder: (context, orientation) {
                 if (orientation == Orientation.landscape) {
@@ -221,6 +239,34 @@ class _CameraScreenState extends State<CameraScreen> {
                             dropdownColor: AppColors.surface,
                             icon: const Icon(Icons.arrow_drop_down,
                                 color: AppColors.textPrimary),
+                            selectedItemBuilder: (BuildContext context) {
+                              return MockScenario.values
+                                  .map<Widget>((MockScenario sc) {
+                                String shortName = sc.displayName;
+                                 if (sc == MockScenario.clearRoad) {
+                                   shortName = 'Clear';
+                                 }
+                                 if (sc == MockScenario.approachingCar) {
+                                   shortName = 'Approaching';
+                                 }
+                                 if (sc == MockScenario.passingTraffic) {
+                                   shortName = 'Passing';
+                                 }
+                                 if (sc == MockScenario.retreatingVehicle) {
+                                   shortName = 'Retreating';
+                                 }
+                                return Center(
+                                  child: Text(
+                                    shortName,
+                                    style: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 12.0,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                );
+                              }).toList();
+                            },
                             items: MockScenario.values.map((sc) {
                               return DropdownMenuItem<MockScenario>(
                                 value: sc,
@@ -285,7 +331,8 @@ class _CameraScreenState extends State<CameraScreen> {
                               try {
                                 await safetyProvider.stop(audioProvider);
                               } catch (e) {
-                                debugPrint('Error stopping safety provider: $e');
+                                debugPrint(
+                                    'Error stopping safety provider: $e');
                               }
                               if (context.mounted) Navigator.pop(context);
                             },
@@ -293,7 +340,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
                           // Scenario drop-down selector
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12.0),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(12.0),
@@ -361,12 +409,15 @@ class _CameraScreenState extends State<CameraScreen> {
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 16.0,
             left: 16.0,
-            right: 16.0,
+            right: MediaQuery.of(context).orientation == Orientation.landscape
+                ? MediaQuery.of(context).size.width * 0.5
+                : 16.0,
             child: OrientationBuilder(
               builder: (context, orientation) {
                 if (orientation == Orientation.landscape) {
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.75),
                       borderRadius: BorderRadius.circular(16.0),
@@ -453,8 +504,7 @@ class _CameraScreenState extends State<CameraScreen> {
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (_) =>
-                                    ReportScreen(report: report),
+                                builder: (_) => ReportScreen(report: report),
                               ),
                             );
                           },
@@ -467,7 +517,8 @@ class _CameraScreenState extends State<CameraScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12.0, vertical: 8.0),
                           ),
-                          icon: const Icon(Icons.stop_circle_rounded, size: 16.0),
+                          icon:
+                              const Icon(Icons.stop_circle_rounded, size: 16.0),
                           label: const Text(
                             'END',
                             style: TextStyle(
@@ -495,7 +546,8 @@ class _CameraScreenState extends State<CameraScreen> {
                         child: Row(
                           children: [
                             RiskGauge(
-                              riskScore: safetyProvider.latestState?.riskScore ?? 0.0,
+                              riskScore:
+                                  safetyProvider.latestState?.riskScore ?? 0.0,
                               confidence:
                                   safetyProvider.latestState?.confidence ?? 1.0,
                             ),
@@ -506,10 +558,13 @@ class _CameraScreenState extends State<CameraScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   TtcProgressBar(
-                                    ttcSec: safetyProvider.topKThreats.isNotEmpty
-                                        ? safetyProvider.topKThreats.first.ttcSec
-                                        : double.infinity,
-                                    safeTtcLimit: settingsProvider.safeTtcLimitSec,
+                                    ttcSec:
+                                        safetyProvider.topKThreats.isNotEmpty
+                                            ? safetyProvider
+                                                .topKThreats.first.ttcSec
+                                            : double.infinity,
+                                    safeTtcLimit:
+                                        settingsProvider.safeTtcLimitSec,
                                   ),
                                   const SizedBox(height: 12.0),
                                   ElevatedButton.icon(
@@ -519,16 +574,19 @@ class _CameraScreenState extends State<CameraScreen> {
                                       try {
                                         await cameraProvider.stopStreaming();
                                       } catch (e) {
-                                        debugPrint('Error stopping streaming: $e');
+                                        debugPrint(
+                                            'Error stopping streaming: $e');
                                       }
                                       try {
-                                        await safetyProvider.stop(audioProvider);
+                                        await safetyProvider
+                                            .stop(audioProvider);
                                       } catch (e) {
-                                        debugPrint('Error stopping safety provider: $e');
+                                        debugPrint(
+                                            'Error stopping safety provider: $e');
                                       }
 
-                                      final report =
-                                          await safetyProvider.getSessionReport();
+                                      final report = await safetyProvider
+                                          .getSessionReport();
                                       if (!context.mounted) return;
                                       Navigator.pushReplacement(
                                         context,
@@ -542,10 +600,11 @@ class _CameraScreenState extends State<CameraScreen> {
                                       backgroundColor: AppColors.stop,
                                       foregroundColor: AppColors.textPrimary,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12.0),
+                                        borderRadius:
+                                            BorderRadius.circular(12.0),
                                       ),
-                                      padding:
-                                          const EdgeInsets.symmetric(vertical: 12.0),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12.0),
                                     ),
                                     icon: const Icon(Icons.stop_circle_rounded),
                                     label: const Text(
@@ -572,7 +631,8 @@ class _CameraScreenState extends State<CameraScreen> {
                                 ? 0
                                 : safetyProvider.topKThreats.any((v) =>
                                         v.approaching &&
-                                        v.ttcSec < settingsProvider.safeTtcLimitSec)
+                                        v.ttcSec <
+                                            settingsProvider.safeTtcLimitSec)
                                     ? 1
                                     : 0
                             : 0, // dynamic count
