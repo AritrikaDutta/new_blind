@@ -243,18 +243,18 @@ class _CameraScreenState extends State<CameraScreen> {
                               return MockScenario.values
                                   .map<Widget>((MockScenario sc) {
                                 String shortName = sc.displayName;
-                                 if (sc == MockScenario.clearRoad) {
-                                   shortName = 'Clear';
-                                 }
-                                 if (sc == MockScenario.approachingCar) {
-                                   shortName = 'Approaching';
-                                 }
-                                 if (sc == MockScenario.passingTraffic) {
-                                   shortName = 'Passing';
-                                 }
-                                 if (sc == MockScenario.retreatingVehicle) {
-                                   shortName = 'Retreating';
-                                 }
+                                if (sc == MockScenario.clearRoad) {
+                                  shortName = 'Clear';
+                                }
+                                if (sc == MockScenario.approachingCar) {
+                                  shortName = 'Approaching';
+                                }
+                                if (sc == MockScenario.passingTraffic) {
+                                  shortName = 'Passing';
+                                }
+                                if (sc == MockScenario.retreatingVehicle) {
+                                  shortName = 'Retreating';
+                                }
                                 return Center(
                                   child: Text(
                                     shortName,
